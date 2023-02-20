@@ -118,6 +118,27 @@ endp
 ;------------------------------------------
 
 ;------------------------------------------
+; LoadBorderChars
+;------------------------------------------
+; In:   
+; Out:  
+; Dstr: 
+;------------------------------------------
+LoadBorderChars macro
+
+        nop
+        lodsw
+        xchg ax, bx
+        xchg bh, bl
+
+        lodsb
+        xchg al, dh
+        nop
+
+endm
+;------------------------------------------
+
+;------------------------------------------
 ; MakeBorder
 ;------------------------------------------
 ; In:   AH:AL = left  top    x:y
@@ -129,21 +150,56 @@ endp
 
 MakeBorder proc
 
-    call CoordToOffset
-    mov di, ax
+    call CoordToOffset  ; ax = offset
 
-    mov dl, bh
 
-    push bx
-    mov bx, 2324h
-    mov dh, 21h
+    mov di, ax          ; указали на начало рамочки
+
+    mov cx, bx          ; количество строк 
+    and cx, 0FFh
+
+    mov dl, bh          ; ширина рамочки
+
+@@next:
+    push di             ; запомнили первый столбец текущей строки
+
+    cld
+    cmp cl, bl
+    je  @@first
+    cmp cl, 1
+    je @@last
+
+@@middle:
+    mov si, offset Preset0 + 3
+    LoadBorderChars
+
+    jmp @@line
+
+@@first:
+    mov si, offset Preset0
+    LoadBorderChars
+    jmp @@line
+
+@@last:
+    mov si, offset Preset0 + 6
+    LoadBorderChars
+
+@@line:
+    push cx
     call MakeLine
-    pop bx
+    pop cx
+
+    pop di              ; вернулись в первый столбец
+    add di, 80d * 2d    ; перешли на следующую строчку
+
+    loop @@next
 
     ret
 endp
 
 ;------------------------------------------
+
+
 
 ;------------------------------------------
 ; MakeLine
@@ -152,7 +208,7 @@ endp
 ;       BH:BL:DH = mid, left, right chars
 ;       DL       = lenght
 ; Out:
-; Dstr: None
+; Dstr: DI, AX, CX
 ;------------------------------------------
 
 MakeLine proc
@@ -163,12 +219,10 @@ MakeLine proc
     stosw
 
     mov al, bh
-    push cx
     mov cx, dx
     and cx, 0FFh
     sub cx, 2
     rep stosw
-    pop cx
 
     mov al, dh
     stosw
@@ -203,6 +257,9 @@ CoordToOffset proc
     ret
 endp
 ;------------------------------------------
+
+Preset0:
+    db 0cdh, 0c9h, 0bbh, " ", 0bah, 0bah, 0cdh, 0c8h, 0bch
 
 end start
 
