@@ -72,7 +72,7 @@ Start:
     call PrintNumSys
 
     mov ax, 0C28h
-    mov bx, 0A03h
+    mov bx, 140Ah
     call MakeBorder
 
     mov al, 0
@@ -170,18 +170,18 @@ MakeBorder proc
     je @@last
 
 @@middle:
-    mov si, offset Preset0 + 3
+    mov si, offset Preset1 + 3
     LoadBorderChars
 
     jmp @@line
 
 @@first:
-    mov si, offset Preset0
+    mov si, offset Preset1
     LoadBorderChars
     jmp @@line
 
 @@last:
-    mov si, offset Preset0 + 6
+    mov si, offset Preset1 + 6
     LoadBorderChars
 
 @@line:
@@ -260,6 +260,8 @@ endp
 
 Preset0:
     db 0cdh, 0c9h, 0bbh, " ", 0bah, 0bah, 0cdh, 0c8h, 0bch
+Preset1:
+    db "-## ##-##"
 
 end start
 
