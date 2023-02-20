@@ -1,5 +1,6 @@
 .model tiny
 .code
+.186
 locals @@
 org 100h
 
@@ -37,6 +38,31 @@ LoadESVideo macro
 endm
 ;------------------------------------------
 
+;------------------------------------------
+; Mul80
+;------------------------------------------
+; In:   AX
+; Out:  AX = 80 * AX
+; Dstr: None
+;------------------------------------------
+
+Mul80 macro
+
+    nop
+    push bx         ; сохраним значение bx
+    
+    mov bx, ax
+    shl ax, 6       ; x * 80 = x * 2^6 + x * 2^4 = x << 6 + x << 4
+    shl bx, 4
+    add ax, bx
+
+    pop bx          ; забрали значение ax с al
+    nop
+
+endm
+;------------------------------------------
+
+
 Start:
     LoadESVideo
     
@@ -46,7 +72,7 @@ Start:
     call PrintNumSys
 
     mov ax, 0C28h
-    mov bx, 0A0Ah
+    mov bx, 0A03h
     call MakeBorder
 
     mov al, 0
@@ -64,29 +90,29 @@ Start:
 
 PrintNumSys proc
 
-next@@:
+@@next:
         mov dx, 0   
         div cx
                         
         cmp dx, 0Ah
-        jb  digit@@
-        jae char@@
+        jb  @@digit
+        jae @@char
 
-digit@@:  
+@@digit:  
         add dx, '0'
-        jmp write_sym@@
+        jmp @@write_sym
 
-char@@:
+@@char:
         sub dx, 0Ah
         add dx, 'A'
 
-write_sym@@:
+@@write_sym:
         mov es:[bx], dl
         sub bx, 2
         cmp ax, 0
-        jne next@@
+        jne @@next
         
-end@@:
+@@end:
         ret
 endp
 ;------------------------------------------
@@ -95,7 +121,7 @@ endp
 ; MakeBorder
 ;------------------------------------------
 ; In:   AH:AL = left  top    x:y
-;       BH:BL = right bottom x:y
+;       BH:BL = width:height
 ;       
 ; Out:  
 ; Dstr: AX, BX, DX
@@ -104,16 +130,51 @@ endp
 MakeBorder proc
 
     call CoordToOffset
-    xchg ax, bx
+    mov di, ax
 
-    call CoordToOffset
-    xchg ax, bx
+    mov dl, bh
 
-
+    push bx
+    mov bx, 2324h
+    mov dh, 21h
+    call MakeLine
+    pop bx
 
     ret
 endp
 
+;------------------------------------------
+
+;------------------------------------------
+; MakeLine
+;------------------------------------------
+; In:   ES:DI    = where
+;       BH:BL:DH = mid, left, right chars
+;       DL       = lenght
+; Out:
+; Dstr: None
+;------------------------------------------
+
+MakeLine proc
+
+    cld
+    mov ah, 0Fh
+    mov al, bl
+    stosw
+
+    mov al, bh
+    push cx
+    mov cx, dx
+    and cx, 0FFh
+    sub cx, 2
+    rep stosw
+    pop cx
+
+    mov al, dh
+    stosw
+
+    ret
+endp
 ;------------------------------------------
 
 ;------------------------------------------
@@ -126,29 +187,21 @@ endp
 
 CoordToOffset proc
 
-    push dx
-    push ax
-    shr ax, 8
+    push bx         ; сохраним значение bx
+    push ax         ; сохраним значение y, которое в al
+    shr ax, 8       ; оставим в ax значение x
     
-    push bx
-    mov bx, 80d
-    mul bx
-    pop bx
+    Mul80
 
-    pop dx
-    mov dh, 0
-    add ax, dx
+    pop bx          ; забрали значение ax с al
+    and bx, 0FFh    ; обнулили старшие 8 бит
+    add ax, bx
+    shl ax, 1       ; домножили итог на 2
 
-    push bx
-    mov bx, 2
-    mul bx
-    pop bx
-
-    pop dx
+    pop bx          ; восстановили bx
 
     ret
 endp
-
 ;------------------------------------------
 
 end start
