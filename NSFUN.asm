@@ -53,103 +53,42 @@ Start:
     Exit
 
 ;------------------------------------------
-; PrintNumSys
+; Print10NumSys
 ;------------------------------------------
 ; In:   AX = number
 ;       BX = offset
-;       CX = base
 ; Out:  
 ; Dstr: AX, BX, DX
 ;------------------------------------------
-
 PrintNumSys proc
 
-next@@:
+@@next:
         mov dx, 0   
-        div cx
+        div 10
                         
         cmp dx, 0Ah
-        jb  digit@@
-        jae char@@
+        jb  @@digit
+        jae @@char
 
-digit@@:  
+@@digit:  
         add dx, '0'
-        jmp write_sym@@
+        jmp @@write_sym
 
-char@@:
+@@char:
         sub dx, 0Ah
         add dx, 'A'
 
-write_sym@@:
+@@write_sym:
         mov es:[bx], dl
         sub bx, 2
         cmp ax, 0
-        jne next@@
+        jne @@next
         
-end@@:
+@@end:
         ret
 endp
 ;------------------------------------------
 
-;------------------------------------------
-; MakeBorder
-;------------------------------------------
-; In:   AH:AL = left  top    x:y
-;       BH:BL = right bottom x:y
-;       
-; Out:  
-; Dstr: AX, BX, DX
-;------------------------------------------
-
-MakeBorder proc
-
-    call CoordToOffset
-    xchg ax, bx
-
-    call CoordToOffset
-    xchg ax, bx
-
-
-
-    ret
-endp
-
-;------------------------------------------
-
-;------------------------------------------
-; CoordToOffset
-;------------------------------------------
-; In:   AH:AL = x:y
-; Out:  AX    = (80d * x + y) * 2
-; Dstr: None
-;------------------------------------------
-
-CoordToOffset proc
-
-    push dx
-    push ax
-    shr ax, 8
-    
-    push bx
-    mov bx, 80d
-    mul bx
-    pop bx
-
-    pop dx
-    mov dh, 0
-    add ax, dx
-
-    push bx
-    mov bx, 2
-    mul bx
-    pop bx
-
-    pop dx
-
-    ret
-endp
-
-;------------------------------------------
 
 end start
 

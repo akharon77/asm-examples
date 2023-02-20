@@ -4,6 +4,11 @@
 locals @@
 org 100h
 
+TOP_OFFSET      equ 0
+MIDDLE_OFFSET   equ 3
+BOTTOM_OFFSET   equ 6
+CMD_TAIL_OFFSET equ 81h
+
 ;------------------------------------------
 ; Exit
 ;------------------------------------------
@@ -66,56 +71,22 @@ endm
 Start:
     LoadESVideo
     
-    mov ax, 4E8h
-    mov bx, 80d * 2d * 12d + 20d * 2d
-    mov cx, 2d
-    call PrintNumSys
+    ; mov ax, 4E8h
+    ; mov bx, 80d * 2d * 12d + 20d * 2d
+    ; mov cx, 2d
+    ; call PrintNumSys
 
-    mov ax, 0C28h
-    mov bx, 140Ah
+    mov ax, 0309h
+    mov bx, 150Ah
+    mov si, offset Preset0
     call MakeBorder
+
+    mov si, CMD_TAIL_OFFSET + 1
+    mov bx, 150Bh
+    call StrOut
 
     mov al, 0
     Exit
-
-;------------------------------------------
-; PrintNumSys
-;------------------------------------------
-; In:   AX = number
-;       BX = offset
-;       CX = base
-; Out:  
-; Dstr: AX, BX, DX
-;------------------------------------------
-
-PrintNumSys proc
-
-@@next:
-        mov dx, 0   
-        div cx
-                        
-        cmp dx, 0Ah
-        jb  @@digit
-        jae @@char
-
-@@digit:  
-        add dx, '0'
-        jmp @@write_sym
-
-@@char:
-        sub dx, 0Ah
-        add dx, 'A'
-
-@@write_sym:
-        mov es:[bx], dl
-        sub bx, 2
-        cmp ax, 0
-        jne @@next
-        
-@@end:
-        ret
-endp
-;------------------------------------------
 
 ;------------------------------------------
 ; LoadBorderChars
@@ -127,12 +98,14 @@ endp
 LoadBorderChars macro
 
         nop
+        push si
         lodsw
         xchg ax, bx
         xchg bh, bl
 
         lodsb
         xchg al, dh
+        pop si
         nop
 
 endm
@@ -147,42 +120,36 @@ endm
 ; Out:  
 ; Dstr: AX, BX, DX
 ;------------------------------------------
-
 MakeBorder proc
-
     call CoordToOffset  ; ax = offset
 
-
     mov di, ax          ; указали на начало рамочки
-
     mov cx, bx          ; количество строк 
     and cx, 0FFh
-
     mov dl, bh          ; ширина рамочки
 
 @@next:
     push di             ; запомнили первый столбец текущей строки
-
-    cld
     cmp cl, bl
     je  @@first
+
     cmp cl, 1
     je @@last
 
-@@middle:
-    mov si, offset Preset1 + 3
-    LoadBorderChars
-
-    jmp @@line
-
-@@first:
-    mov si, offset Preset1
-    LoadBorderChars
-    jmp @@line
-
-@@last:
-    mov si, offset Preset1 + 6
-    LoadBorderChars
+@@middle:                   ;*
+    add si, MIDDLE_OFFSET   ;*
+    LoadBorderChars         ;*
+    sub si, MIDDLE_OFFSET   ;*
+    jmp @@line              ;*
+                            ;*
+@@first:                    ;* выбор нужного набора символов mid left right
+    LoadBorderChars         ;*
+    jmp @@line              ;*
+                            ;*
+@@last:                     ;*
+    add si, BOTTOM_OFFSET   ;*
+    LoadBorderChars         ;*
+    sub si, BOTTOM_OFFSET   ;*
 
 @@line:
     push cx
@@ -196,10 +163,7 @@ MakeBorder proc
 
     ret
 endp
-
 ;------------------------------------------
-
-
 
 ;------------------------------------------
 ; MakeLine
@@ -210,7 +174,6 @@ endp
 ; Out:
 ; Dstr: DI, AX, CX
 ;------------------------------------------
-
 MakeLine proc
 
     cld
@@ -232,13 +195,70 @@ endp
 ;------------------------------------------
 
 ;------------------------------------------
+; StrOut
+;------------------------------------------
+; In:   DS:SI = from
+;       BH:BL = x:y
+; Out:
+; Dstr: AX, DX
+;------------------------------------------
+StrOut proc
+    mov ax, bx
+    call CoordToOffset
+    mov di, ax
+    push di
+
+    mov dl, 0Fh         ; базовый атрибут
+    cld
+
+    jmp @@next
+
+@@next_str:
+    pop di
+    add di, 80d * 2d
+    push di
+
+@@next:
+    lodsb
+
+    cmp al, "%"
+    je @@attr
+
+    cmp al, "$"
+    je @@end
+
+    cmp al, "\"
+    je @@next_str
+
+    jmp @@out_sym
+
+@@attr:
+    push bx
+    call InputNum
+    mov dl, bl
+    pop bx
+    jmp @@next
+
+@@out_sym:
+    stosb
+    mov al, dl
+    stosb
+    jmp @@next
+
+@@end:
+    pop di
+    ret
+
+endp
+;------------------------------------------
+
+;------------------------------------------
 ; CoordToOffset
 ;------------------------------------------
 ; In:   AH:AL = x:y
 ; Out:  AX    = (80d * x + y) * 2
 ; Dstr: None
 ;------------------------------------------
-
 CoordToOffset proc
 
     push bx         ; сохраним значение bx
@@ -258,9 +278,53 @@ CoordToOffset proc
 endp
 ;------------------------------------------
 
-Preset0:
+;------------------------------------------
+; InputNum
+;------------------------------------------
+; In:   DS:SI = from 
+; Out:  BX    = num
+; Dstr: AX, SI, DX
+;------------------------------------------
+InputNum proc
+    mov ah, 0
+    mov bx, 0
+    
+@@next:
+    lodsb
+
+    cmp al, "%"
+    je @@end
+
+    cmp al, "9"
+    jbe @@digit
+
+    cmp al, "F"
+    jbe @@char
+
+@@digit:
+    sub ax, "0"
+    jmp @@dig_by_dig
+
+@@char:
+    sub ax, "A"
+    add ax, 0Ah
+
+@@dig_by_dig:
+    shl bx, 4
+    add bx, ax
+
+    jmp @@next
+    
+@@end: 
+    ret
+
+endp
+;------------------------------------------
+
+.data
+
+preset0:
     db 0cdh, 0c9h, 0bbh, " ", 0bah, 0bah, 0cdh, 0c8h, 0bch
-Preset1:
     db "-## ##-##"
 
 end start
