@@ -27,6 +27,23 @@ endm
 ;------------------------------------------
 
 ;------------------------------------------
+; FillScreen
+;------------------------------------------
+; In:   AH:AL = attr:sym 
+; Out:  None
+; Dstr: None
+;------------------------------------------
+FillScreen macro
+    nop
+    mov di, 0
+    mov cx, 80d * 25d
+    rep stosw
+    nop
+
+endm
+;------------------------------------------
+
+;------------------------------------------
 ; LoadESVideo
 ;------------------------------------------
 ; In:   None
@@ -66,12 +83,10 @@ endm
 
 Start:
     LoadESVideo
-    
-    ; mov ax, 4E8h
-    ; mov bx, 80d * 2d * 12d + 20d * 2d
-    ; mov cx, 2d
-    ; call PrintNumSys
 
+    mov ax, 31h
+    FillScreen
+    
     mov si, CMD_TAIL_OFFSET
     call CalcPos
 
