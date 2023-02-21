@@ -4,10 +4,11 @@
 locals @@
 org 100h
 
-TOP_OFFSET      equ 0
-MIDDLE_OFFSET   equ 3
-BOTTOM_OFFSET   equ 6
-CMD_TAIL_OFFSET equ 81h
+TOP_OFFSET          equ 0
+MIDDLE_OFFSET       equ 3
+BOTTOM_OFFSET       equ 6
+CMD_TAIL_LEN_OFFSET equ 80h
+CMD_TAIL_OFFSET     equ 82h
 
 ;------------------------------------------
 ; Exit
@@ -17,11 +18,10 @@ CMD_TAIL_OFFSET equ 81h
 ; Dstr: N/A
 ;------------------------------------------
 Exit macro
-
-        nop
-        mov ah, 4ch
-        int 21h
-        nop
+    nop
+    mov ah, 4ch
+    int 21h
+    nop
 
 endm
 ;------------------------------------------
@@ -34,11 +34,10 @@ endm
 ; Dstr: BX
 ;------------------------------------------
 LoadESVideo macro
-
-        nop
-        mov bx, 0b800h
-        mov es, bx
-        nop
+    nop
+    mov bx, 0b800h
+    mov es, bx
+    nop
         
 endm
 ;------------------------------------------
@@ -50,9 +49,7 @@ endm
 ; Out:  AX = 80 * AX
 ; Dstr: None
 ;------------------------------------------
-
 Mul80 macro
-
     nop
     push bx         ; сохраним значение bx
     
@@ -67,7 +64,6 @@ Mul80 macro
 endm
 ;------------------------------------------
 
-
 Start:
     LoadESVideo
     
@@ -76,13 +72,17 @@ Start:
     ; mov cx, 2d
     ; call PrintNumSys
 
-    mov ax, 0309h
-    mov bx, 150Ah
+    mov si, CMD_TAIL_OFFSET
+    call CalcPos
+
+    push ax
     mov si, offset Preset0
     call MakeBorder
 
-    mov si, CMD_TAIL_OFFSET + 1
-    mov bx, 150Bh
+    pop bx
+    add bh, 1
+    add bl, 1
+    mov si, CMD_TAIL_OFFSET
     call StrOut
 
     mov al, 0
@@ -316,6 +316,76 @@ InputNum proc
     jmp @@next
     
 @@end: 
+    ret
+
+endp
+;------------------------------------------
+
+;------------------------------------------
+; CalcPos
+;------------------------------------------
+; In:   DS:SI = string
+; Out:  AH:AL = left top x:y
+;       BH:BL = width:height
+; Dstr: 
+;------------------------------------------
+CalcPos proc
+    mov dx, 0                           ; DH:DL = width:height
+    mov ch, 0
+    mov bl, 0
+    mov cl, ds:[CMD_TAIL_LEN_OFFSET]
+    
+@@next:
+    lodsb
+
+    cmp al, "\"
+    je @@new_str
+    
+    cmp al, "%"
+    je @@num
+
+    inc bl
+    jmp @@end_loop
+
+@@num:
+    push es
+    push di
+    mov cx, ds
+    mov es, cx
+    mov di, si
+    repne scasb
+    pop di
+    pop es
+    jmp @@end_loop
+
+@@new_str:
+    cmp bl, dh
+    jbe @@last_width
+    mov dh, bl
+
+@@last_width:
+    mov bl, 0
+    inc dl
+
+@@end_loop:
+    cmp al, "$"
+    jne @@next
+
+    cmp bl, dh
+    jbe @@end
+    mov dh, bl
+
+@@end:
+    add dh, 2
+    add dl, 2
+    mov bh, dh
+    mov bl, dl
+    mov ah, 12d
+    mov al, 40d
+    shr dh, 1
+    shr dl, 1
+    sub ah, dl
+    sub al, dh
     ret
 
 endp
