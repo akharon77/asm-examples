@@ -80,8 +80,8 @@ Start:
     call MakeBorder
 
     pop bx
-    add bh, 1
-    add bl, 1
+    add bh, 2
+    add bl, 2
     mov si, CMD_TAIL_OFFSET
     call StrOut
 
@@ -330,7 +330,7 @@ endp
 ; Dstr: 
 ;------------------------------------------
 CalcPos proc
-    mov dx, 0                           ; DH:DL = width:height
+    mov dx, 1                           ; DH:DL = width:height
     mov ch, 0
     mov bl, 0
     mov cl, ds:[CMD_TAIL_LEN_OFFSET]
@@ -354,6 +354,7 @@ CalcPos proc
     mov es, cx
     mov di, si
     repne scasb
+    mov si, di
     pop di
     pop es
     jmp @@end_loop
@@ -376,8 +377,8 @@ CalcPos proc
     mov dh, bl
 
 @@end:
-    add dh, 2
-    add dl, 2
+    add dh, 3           ; лишний $
+    add dl, 4
     mov bh, dh
     mov bl, dl
     mov ah, 12d
