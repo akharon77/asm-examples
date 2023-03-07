@@ -4,11 +4,17 @@
 locals @@
 org 100h
 
-TOP_OFFSET          equ 0
-MIDDLE_OFFSET       equ 3
-BOTTOM_OFFSET       equ 6
+TOP_OFFSET          equ 0h
+MIDDLE_OFFSET       equ 3h
+BOTTOM_OFFSET       equ 6h
 
 TRUE                equ 0FFh
+
+CNT_REGS            equ 13d
+REG_LEN             equ 2d
+FRAME_WIDTH         equ 10d
+FRAME_HEIGHT        equ 14d
+BUFFER_SIZE         equ FRAME_WIDTH * FRAME_HEIGHT
 
 ;------------------------------------------
 ; Exit
@@ -164,6 +170,7 @@ start:
 
     mov al, 0
     ExitResident
+    ; Exit
 
 New09 proc
     pusha
@@ -172,7 +179,6 @@ New09 proc
 
     LoadESVideo
 
-    mov bx, 80d * 5d * 2d + 40d * 2d    ; вывод на экран
     mov ah, 4eh
 
     in al, 60h
@@ -182,10 +188,6 @@ New09 proc
     not cs:[frame_status]
 
 @@no_upd_status:
-
-    mov es:[bx], ax
-    mov al, cs:[frame_status]
-    mov es:[bx + 2], ax
 
     in al, 61h                  ; мигаем bit 7, 1000000b = 80h
     or al, 80h
@@ -217,14 +219,22 @@ New08 proc
     jne @@no_frame
 
     push ds
-    mov di, cs
-    mov ds, di
+    mov bx, cs
+    mov ds, bx
 
-    LoadESVideo
+    mov bx, cs
+    mov es, bx
+    mov di, offset draw_buffer
     mov ax, 0
-    mov bx, 0A0Ah
+    mov bh, FRAME_WIDTH
+    mov bl, FRAME_HEIGHT
     mov si, offset preset0
-    call MakeBorder
+    call DrawBorderToBuffer
+
+    mov di, offset draw_buffer + FRAME_WIDTH * 2h + 1h
+    mov bx, cs
+    mov es, bx
+    call PrintRegsNameToBuffer
 
     pop ds
 
@@ -269,29 +279,61 @@ endm
 ;------------------------------------------
 
 ;------------------------------------------
-; MakeBorder
+; PrintRegsNameToBuffer 
 ;------------------------------------------
-; Assumes: ES = video memory address
-; In:   AH:AL = left  top    x:y
-;       BH:BL = width:height
-;       SI    = preset address
-; Out:  
+; In:   ES:DI = buffer address
+; Out: 
+; Dstr:
+;------------------------------------------
+PrintRegsNameToBuffer proc
+    push ds
+    mov cx, CNT_REGS
+
+    mov bx, cs
+    mov ds, bx
+
+    mov si, offset reg_names
+
+; перекидываем из ds:si в es:di
+
+@@next:
+    mov ah, 8h
+
+    lodsb
+    stosw
+
+    lodsb
+    stosw
+
+    add di, FRAME_WIDTH * 2d - 2d * 2d
+
+    loop @@next
+    pop ds
+
+    ret
+
+endp
+;------------------------------------------
+
+;------------------------------------------
+; DrawBorderToBuffer
+;------------------------------------------
+; In:   BH:BL = width:height
+;       DS:SI = preset address
+;       ES:DI = buffer address
+; Out: 
 ; Dstr: AX, BX, DX
 ;------------------------------------------
-MakeBorder proc
-    call CoordToOffset  ; ax = offset
-
-    mov di, ax          ; указали на начало рамочки
+DrawBorderToBuffer proc
     mov cx, bx          ; количество строк 
     and cx, 0FFh
     mov dl, bh          ; ширина рамочки
 
 @@next:
-    push di             ; запомнили первый столбец текущей строки
     cmp cl, bl
     je  @@first
 
-    cmp cl, 1
+    cmp cl, 1h
     je @@last
 
 @@middle:                   ;*
@@ -313,9 +355,6 @@ MakeBorder proc
     push cx
     call MakeLine
     pop cx
-
-    pop di              ; вернулись в первый столбец
-    add di, 80d * 2d    ; перешли на следующую строчку
 
     loop @@next
 
@@ -485,6 +524,11 @@ preset0 db 0cdh, 0c9h, 0bbh, " ", 0bah, 0bah, 0cdh, 0c8h, 0bch
 preset1 db "-## ##-##"
 
 frame_status db 0
+
+reg_names db "ax", "bx", "cx", "dx", "si", "di", "sp", "bp", "ds", "cs", "es", "ss", "ip"
+
+save_buffer dw BUFFER_SIZE dup (0)
+draw_buffer dw BUFFER_SIZE dup (0)
 
 program_end:
 
