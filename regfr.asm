@@ -10,7 +10,7 @@ BOTTOM_OFFSET       equ 6h
 
 TRUE                equ 0FFh
 
-CNT_REGS            equ 13d
+CNT_REGS            equ 12d
 REG_LEN             equ 2d
 FRAME_WIDTH         equ 10d
 FRAME_HEIGHT        equ 14d
@@ -140,10 +140,12 @@ endm
 
 start:
 
-    cli
-    SetIntr 09
-    SetIntr 08
-    sti
+    ; cli
+    ; SetIntr 09
+    ; SetIntr 08
+    ; sti
+
+    call New08
 
     ; mov di, 80d * 2d * 5d + 40d * 2d
     
@@ -215,6 +217,8 @@ New08 proc
     pushf
     push ds es
 
+    call SaveRegs
+
     cmp cs:[frame_status], TRUE
     jne @@no_frame
 
@@ -224,6 +228,7 @@ New08 proc
 
     mov bx, cs
     mov es, bx
+
     mov di, offset draw_buffer
     mov ax, 0
     mov bh, FRAME_WIDTH
@@ -231,10 +236,29 @@ New08 proc
     mov si, offset preset0
     call DrawBorderToBuffer
 
-    mov di, offset draw_buffer + FRAME_WIDTH * 2h + 1h
-    mov bx, cs
-    mov es, bx
+    mov di, offset draw_buffer + FRAME_WIDTH * 2h + 2h
     call PrintRegsNameToBuffer
+
+    mov cx, CNT_REGS
+    mov di, offset draw_buffer + FRAME_WIDTH * 2h + 2h + REG_LEN + 2h
+    mov si, offset saved_regs
+@@next:
+    push cx
+    mov bx, cs:[si]
+    add si, 2h
+    push si
+    call PrintReg
+    pop si
+    pop cx
+    add di, FRAME_WIDTH * 2h
+    loop @@next
+
+    ; call CmpDrawAndVideo
+
+    LoadESVideo
+    mov si, offset draw_buffer
+    mov di, 0h
+    call OutBuffer
 
     pop ds
 
@@ -254,6 +278,47 @@ old_08_seg dw 0
     iret
 
 endp
+
+;------------------------------------------
+; CmpDrawAndVideo
+;------------------------------------------
+; In:   DS:SI
+; Out:
+; Dstr:
+;------------------------------------------
+; CmpDrawAndVideo proc
+;     mov cx, BUFFER_SIZE
+;     add si, cx
+;     cmp ds:[si + cx], es:[di]
+;     sub si, cx
+;     ret
+; 
+; endp
+;------------------------------------------
+
+;------------------------------------------
+; OutBuffer
+;------------------------------------------
+; In:   DS:SI
+; Out:
+; Dstr:
+;------------------------------------------
+OutBuffer proc
+    mov cx, FRAME_HEIGHT
+@@next_x:
+    push cx
+    mov cx, FRAME_WIDTH
+@@next_y:
+    lodsw
+    stosw
+    loop @@next_y
+    pop cx
+    add di, 80d * 2d - 2d * FRAME_WIDTH
+    loop @@next_x
+    ret
+
+endp
+;------------------------------------------
 
 ;------------------------------------------
 ; LoadBorderChars
@@ -297,21 +362,70 @@ PrintRegsNameToBuffer proc
 ; перекидываем из ds:si в es:di
 
 @@next:
-    mov ah, 8h
+    mov ah, 87h
 
-    lodsb
-    stosw
+    push cx
+    mov cx, REG_LEN
+    @@next_chr_reg:
+        lodsb
+        stosw
+    loop @@next_chr_reg
+    pop cx
 
-    lodsb
-    stosw
-
-    add di, FRAME_WIDTH * 2d - 2d * 2d
+    add di, FRAME_WIDTH * 2d - REG_LEN * 2d
 
     loop @@next
     pop ds
 
     ret
 
+endp
+;------------------------------------------
+
+;------------------------------------------
+; SaveRegs
+;------------------------------------------
+; In:
+; Out: 
+; Dstr: CX, DI
+;------------------------------------------
+SaveRegs proc
+    push ss es cs ds bp sp di si dx cx bx ax
+    mov cx, CNT_REGS
+    mov di, offset saved_regs
+@@next:
+    pop cs:[di]
+    add di, 2h
+    loop @@next
+    ret
+endp
+;------------------------------------------
+
+;------------------------------------------
+; PrintReg 
+;------------------------------------------
+; In:   ES:DI = buffer address
+;       BX    = reg
+; Out: 
+; Dstr: AX, CX, DX, SI
+;------------------------------------------
+PrintReg proc
+    add di, 2h * 4h
+    mov cx, 4h
+    std
+
+@@next:
+    mov ax, bx
+    and ax, 0Fh
+    mov si, offset hexAlph
+    add si, ax
+    mov al, cs:[si]
+    mov ah, 87h
+    stosw
+    shr bx, 4
+    loop @@next
+
+    ret
 endp
 ;------------------------------------------
 
@@ -392,64 +506,6 @@ endp
 ;------------------------------------------
 
 ;------------------------------------------
-; StrOut
-;------------------------------------------
-; In:   DS:SI = from
-;       BH:BL = x:y
-; Out:
-; Dstr: AX, DX
-;------------------------------------------
-StrOut proc
-    mov ax, bx
-    call CoordToOffset
-    mov di, ax
-    push di
-
-    mov dl, 0Fh         ; базовый атрибут
-    cld
-
-    jmp @@next
-
-@@next_str:
-    pop di
-    add di, 80d * 2d
-    push di
-
-@@next:
-    lodsb
-
-    cmp al, "%"
-    je @@attr
-
-    cmp al, "$"
-    je @@end
-
-    cmp al, "\"
-    je @@next_str
-
-    jmp @@out_sym
-
-@@attr:
-    push bx
-    call InputNum
-    mov dl, bl
-    pop bx
-    jmp @@next
-
-@@out_sym:
-    stosb
-    mov al, dl
-    stosb
-    jmp @@next
-
-@@end:
-    pop di
-    ret
-
-endp
-;------------------------------------------
-
-;------------------------------------------
 ; CoordToOffset
 ;------------------------------------------
 ; In:   AH:AL = x:y
@@ -475,49 +531,6 @@ CoordToOffset proc
 endp
 ;------------------------------------------
 
-;------------------------------------------
-; InputNum
-;------------------------------------------
-; In:   DS:SI = from 
-; Out:  BX    = num
-; Dstr: AX, SI, DX
-;------------------------------------------
-InputNum proc
-    mov ah, 0
-    mov bx, 0
-    
-@@next:
-    lodsb
-
-    cmp al, "%"
-    je @@end
-
-    cmp al, "9"
-    jbe @@digit
-
-    cmp al, "F"
-    jbe @@char
-
-@@digit:
-    sub ax, "0"
-    jmp @@dig_by_dig
-
-@@char:
-    sub ax, "A"
-    add ax, 0Ah
-
-@@dig_by_dig:
-    shl bx, 4
-    add bx, ax
-
-    jmp @@next
-    
-@@end: 
-    ret
-
-endp
-;------------------------------------------
-
 .data
 
 preset0 db 0cdh, 0c9h, 0bbh, " ", 0bah, 0bah, 0cdh, 0c8h, 0bch
@@ -525,7 +538,10 @@ preset1 db "-## ##-##"
 
 frame_status db 0
 
-reg_names db "ax", "bx", "cx", "dx", "si", "di", "sp", "bp", "ds", "cs", "es", "ss", "ip"
+reg_names db "ax", "bx", "cx", "dx", "si", "di", "sp", "bp", "ds", "cs", "es", "ss"
+saved_regs dw CNT_REGS dup (0)
+
+hexAlph db "0123456789ABCDEF"
 
 save_buffer dw BUFFER_SIZE dup (0)
 draw_buffer dw BUFFER_SIZE dup (0)
