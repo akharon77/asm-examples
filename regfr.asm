@@ -1,14 +1,12 @@
 .model tiny
 .code
-.186
+.286
 locals @@
 org 100h
 
 TOP_OFFSET          equ 0
 MIDDLE_OFFSET       equ 3
 BOTTOM_OFFSET       equ 6
-CMD_TAIL_LEN_OFFSET equ 80h
-CMD_TAIL_OFFSET     equ 82h
 
 TRUE                equ 0FFh
 
@@ -27,6 +25,22 @@ Exit macro
 
 endm
 ;------------------------------------------
+
+SetIntr macro num
+    nop
+    LoadESIntrTable
+    mov bx, num&h * 4d
+
+    mov ax, es:[bx]
+    mov cs:[old_&num&_ofs], ax
+    mov ax, es:[bx + 2]
+    mov cs:[old_&num&_seg], ax
+
+    mov es:[bx], offset New&num
+    mov ax, cs
+    mov es:[bx + 2], ax
+    nop
+endm
 
 ;------------------------------------------
 ; ExitResident
@@ -121,28 +135,8 @@ endm
 start:
 
     cli
-    LoadESIntrTable
-    mov bx, 9d * 4d                     ; set int 09h
-
-    mov ax, es:[bx]
-    mov cs:[old_09_ofs], ax
-    mov ax, es:[bx + 2]
-    mov cs:[old_09_seg], ax
-
-    mov es:[bx], offset New09
-    mov ax, cs
-    mov es:[bx + 2], ax
-
-    mov bx, 8d * 4d                     ; set int 08h
-
-    mov ax, es:[bx]
-    mov cs:[old_08_ofs], ax
-    mov ax, es:[bx + 2]
-    mov cs:[old_08_seg], ax
-
-    mov es:[bx], offset New08
-    mov ax, cs
-    mov es:[bx + 2], ax
+    SetIntr 09
+    SetIntr 08
     sti
 
     ; mov di, 80d * 2d * 5d + 40d * 2d
@@ -222,11 +216,17 @@ New08 proc
     cmp cs:[frame_status], TRUE
     jne @@no_frame
 
+    push ds
+    mov di, cs
+    mov ds, di
+
     LoadESVideo
     mov ax, 0
     mov bx, 0A0Ah
     mov si, offset preset0
     call MakeBorder
+
+    pop ds
 
 @@no_frame:
 
@@ -279,11 +279,6 @@ endm
 ; Dstr: AX, BX, DX
 ;------------------------------------------
 MakeBorder proc
-    push ds
-
-    mov di, cs
-    mov ds, di
-
     call CoordToOffset  ; ax = offset
 
     mov di, ax          ; указали на начало рамочки
@@ -323,8 +318,6 @@ MakeBorder proc
     add di, 80d * 2d    ; перешли на следующую строчку
 
     loop @@next
-
-    pop ds
 
     ret
 endp
@@ -481,77 +474,6 @@ InputNum proc
     jmp @@next
     
 @@end: 
-    ret
-
-endp
-;------------------------------------------
-
-;------------------------------------------
-; CalcPos
-;------------------------------------------
-; In:   DS:SI = string
-; Out:  AH:AL = left top x:y
-;       BH:BL = width:height
-; Dstr: 
-;------------------------------------------
-CalcPos proc
-    mov dx, 1                           ; DH:DL = width:height
-    mov ch, 0
-    mov bl, 0
-    mov cl, ds:[CMD_TAIL_LEN_OFFSET]
-    
-@@next:
-    lodsb
-
-    cmp al, "\"
-    je @@new_str
-    
-    cmp al, "%"
-    je @@num
-
-    inc bl
-    jmp @@end_loop
-
-@@num:
-    push es
-    push di
-    mov cx, ds
-    mov es, cx
-    mov di, si
-    repne scasb
-    mov si, di
-    pop di
-    pop es
-    jmp @@end_loop
-
-@@new_str:
-    cmp bl, dh
-    jbe @@last_width
-    mov dh, bl
-
-@@last_width:
-    mov bl, 0
-    inc dl
-
-@@end_loop:
-    cmp al, "$"
-    jne @@next
-
-    cmp bl, dh
-    jbe @@end
-    mov dh, bl
-
-@@end:
-    add dh, 3           ; лишний $
-    add dl, 4
-    mov bh, dh
-    mov bl, dl
-    mov ah, 12d
-    mov al, 40d
-    shr dh, 1
-    shr dl, 1
-    sub ah, dl
-    sub al, dh
     ret
 
 endp
