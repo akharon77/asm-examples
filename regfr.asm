@@ -10,6 +10,8 @@ BOTTOM_OFFSET       equ 6
 CMD_TAIL_LEN_OFFSET equ 80h
 CMD_TAIL_OFFSET     equ 82h
 
+TRUE                equ 0FFh
+
 ;------------------------------------------
 ; Exit
 ;------------------------------------------
@@ -117,22 +119,28 @@ endm
 ;------------------------------------------
 
 start:
-    ; LoadESVideo
-    ; mov ax, 31h
-    ; FillScreen
-    
+
     cli
     LoadESIntrTable
-    mov bx, 9d * 4d
+    mov bx, 9d * 4d                     ; set int 09h
 
     mov ax, es:[bx]
-    mov di, offset old_09_ofs
-    mov [di], ax
+    mov cs:[old_09_ofs], ax
     mov ax, es:[bx + 2]
-    mov di, offset old_09_seg
-    mov [di], ax
+    mov cs:[old_09_seg], ax
 
     mov es:[bx], offset New09
+    mov ax, cs
+    mov es:[bx + 2], ax
+
+    mov bx, 8d * 4d                     ; set int 08h
+
+    mov ax, es:[bx]
+    mov cs:[old_08_ofs], ax
+    mov ax, es:[bx + 2]
+    mov cs:[old_08_seg], ax
+
+    mov es:[bx], offset New08
     mov ax, cs
     mov es:[bx + 2], ax
     sti
@@ -162,10 +170,11 @@ start:
 
     mov al, 0
     ExitResident
-    ; Exit
 
 New09 proc
-    push ax bx es
+    pusha
+    pushf
+    push es
 
     LoadESVideo
 
@@ -173,16 +182,16 @@ New09 proc
     mov ah, 4eh
 
     in al, 60h
-    cmp al, 3bh
-    jne @@irq_by_docs
+    cmp al, 2
+    jne @@no_upd_status
 
-    xor status, 1
+    not cs:[frame_status]
 
-    mov si, offset status
-    mov al, [si] + 'A'
+@@no_upd_status:
+
     mov es:[bx], ax
-
-@@irq_by_docs:
+    mov al, cs:[frame_status]
+    mov es:[bx + 2], ax
 
     in al, 61h                  ; мигаем bit 7, 1000000b = 80h
     or al, 80h
@@ -193,18 +202,46 @@ New09 proc
     mov al, 20h                 ; подаем 20h на порт 20h
     out 20h, al
 
-    pop es bx ax
+    pop es
+    popf
+    popa
 
     db 0eah                     ; jmp far
-old_09_ofs:
-    dw 0
-old_09_seg:
-    dw 0
+old_09_ofs dw 0
+old_09_seg dw 0
 
     iret
 
-status:
-    db 0
+endp
+
+New08 proc
+    pusha
+    pushf
+    push ds es
+
+    cmp cs:[frame_status], TRUE
+    jne @@no_frame
+
+    LoadESVideo
+    mov ax, 0
+    mov bx, 0A0Ah
+    mov si, offset preset0
+    call MakeBorder
+
+@@no_frame:
+
+    mov al, 20h
+    out 20h, al
+
+    pop es ds
+    popf
+    popa
+
+    db 0eah                     ; jmp far
+old_08_ofs dw 0
+old_08_seg dw 0
+
+    iret
 
 endp
 
@@ -234,13 +271,19 @@ endm
 ;------------------------------------------
 ; MakeBorder
 ;------------------------------------------
+; Assumes: ES = video memory address
 ; In:   AH:AL = left  top    x:y
 ;       BH:BL = width:height
-;       
+;       SI    = preset address
 ; Out:  
 ; Dstr: AX, BX, DX
 ;------------------------------------------
 MakeBorder proc
+    push ds
+
+    mov di, cs
+    mov ds, di
+
     call CoordToOffset  ; ax = offset
 
     mov di, ax          ; указали на начало рамочки
@@ -280,6 +323,8 @@ MakeBorder proc
     add di, 80d * 2d    ; перешли на следующую строчку
 
     loop @@next
+
+    pop ds
 
     ret
 endp
@@ -514,9 +559,10 @@ endp
 
 .data
 
-preset0:
-    db 0cdh, 0c9h, 0bbh, " ", 0bah, 0bah, 0cdh, 0c8h, 0bch
-    db "-## ##-##"
+preset0 db 0cdh, 0c9h, 0bbh, " ", 0bah, 0bah, 0cdh, 0c8h, 0bch
+preset1 db "-## ##-##"
+
+frame_status db 0
 
 program_end:
 
