@@ -226,6 +226,10 @@ New08 proc
     mov bx, cs
     mov ds, bx
 
+    LoadESVideo
+    mov di, 0h
+    call CmpDrawAndVideo
+
     mov bx, cs
     mov es, bx
 
@@ -253,8 +257,6 @@ New08 proc
     add di, FRAME_WIDTH * 2h
     loop @@next
 
-    ; call CmpDrawAndVideo
-
     LoadESVideo
     mov si, offset draw_buffer
     mov di, 0h
@@ -262,7 +264,21 @@ New08 proc
 
     pop ds
 
+    jmp @@no_draw_save
+
 @@no_frame:
+    
+    cmp cs:[save_status], TRUE
+    jne @@no_draw_save
+    LoadESVideo
+    not cs:[save_status]
+    mov si, offset save_buffer
+    mov bx, cs
+    mov ds, bx
+    mov di, 0h
+    call OutBuffer
+
+@@no_draw_save:
 
     mov al, 20h
     out 20h, al
@@ -282,18 +298,35 @@ endp
 ;------------------------------------------
 ; CmpDrawAndVideo
 ;------------------------------------------
-; In:   DS:SI
+; Assumes: DS = draw buffer segment
+; In:   ES:DI = video memory address
 ; Out:
 ; Dstr:
 ;------------------------------------------
-; CmpDrawAndVideo proc
-;     mov cx, BUFFER_SIZE
-;     add si, cx
-;     cmp ds:[si + cx], es:[di]
-;     sub si, cx
-;     ret
-; 
-; endp
+CmpDrawAndVideo proc
+    cld
+    mov si, offset draw_buffer
+    mov cx, FRAME_HEIGHT
+@@next_x:
+    push cx
+    mov cx, FRAME_WIDTH
+    @@next_y:
+        lodsw
+        scasw
+        je @@no_upd
+        mov cs:[save_status], TRUE
+        mov ax, es:[di - 2]
+        mov cs:[offset save_buffer + si - 2 - offset draw_buffer], ax
+        @@no_upd:
+        loop @@next_y
+    pop cx
+    add di, 80d * 2d
+    sub di, 2d * FRAME_WIDTH
+    loop @@next_x
+
+    ret
+
+endp
 ;------------------------------------------
 
 ;------------------------------------------
@@ -360,8 +393,6 @@ PrintRegsNameToBuffer proc
     mov ds, bx
 
     mov si, offset reg_names
-
-; перекидываем из ds:si в es:di
 
 @@next:
     mov ah, 7h
@@ -538,9 +569,10 @@ endp
 preset0 db 0cdh, 0c9h, 0bbh, " ", 0bah, 0bah, 0cdh, 0c8h, 0bch
 preset1 db "-## ##-##"
 
-frame_status db 0
+frame_status db TRUE
+save_status  db 0h
 
-reg_names db "ax", "bx", "cx", "dx", "si", "di", "sp", "bp", "ds", "cs", "es", "ss"
+reg_names  db "ax", "bx", "cx", "dx", "si", "di", "sp", "bp", "ds", "cs", "es", "ss"
 saved_regs dw CNT_REGS dup (0)
 
 hexAlph db "0123456789ABCDEF"
