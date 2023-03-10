@@ -140,12 +140,12 @@ endm
 
 start:
 
-    ; cli
-    ; SetIntr 09
-    ; SetIntr 08
-    ; sti
+    cli
+    SetIntr 09
+    SetIntr 08
+    sti
 
-    call New08
+    ; call New08
 
     ; mov di, 80d * 2d * 5d + 40d * 2d
     
@@ -304,6 +304,7 @@ endp
 ; Dstr:
 ;------------------------------------------
 OutBuffer proc
+    cld
     mov cx, FRAME_HEIGHT
 @@next_x:
     push cx
@@ -313,7 +314,8 @@ OutBuffer proc
     stosw
     loop @@next_y
     pop cx
-    add di, 80d * 2d - 2d * FRAME_WIDTH
+    add di, 80d * 2d
+    sub di, 2d * FRAME_WIDTH
     loop @@next_x
     ret
 
@@ -362,7 +364,7 @@ PrintRegsNameToBuffer proc
 ; перекидываем из ds:si в es:di
 
 @@next:
-    mov ah, 87h
+    mov ah, 7h
 
     push cx
     mov cx, REG_LEN
@@ -420,7 +422,7 @@ PrintReg proc
     mov si, offset hexAlph
     add si, ax
     mov al, cs:[si]
-    mov ah, 87h
+    mov ah, 7h
     stosw
     shr bx, 4
     loop @@next
