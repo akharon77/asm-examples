@@ -32,9 +32,11 @@ Exit macro
 endm
 ;------------------------------------------
 
-;------------------------------------------
 SetIntr macro num
     nop
+    LoadESIntrTable
+    mov bx, num&h * 4d
+
     mov ax, es:[bx]
     mov cs:[old_&num&_ofs], ax
     mov ax, es:[bx + 2]
@@ -44,9 +46,7 @@ SetIntr macro num
     mov ax, cs
     mov es:[bx + 2], ax
     nop
-
 endm
-;------------------------------------------
 
 ;------------------------------------------
 ; ExitResident
@@ -141,13 +141,8 @@ endm
 start:
 
     cli
-    LoadESIntrTable
-
-    mov bx, 08h * 4d
-    SetIntr 08
-
-    add bx, 4d
     SetIntr 09
+    SetIntr 08
     sti
 
     mov al, 0
@@ -159,6 +154,8 @@ New09 proc
     push es
 
     LoadESVideo
+
+    mov ah, 4eh
 
     in al, 60h
     cmp al, 2
@@ -188,9 +185,7 @@ old_09_seg dw 0
     iret
 
 endp
-;------------------------------------------
 
-;------------------------------------------
 New08 proc
     pusha
     pushf
