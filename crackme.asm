@@ -54,10 +54,6 @@ endm
 ;------------------------------------------
 
 start:
-    jmp skip_buf_weak       ; buffer in code segment weak
-    buf db 16d dup (0h)
-
-skip_buf_weak:
     mov bx, cs
     mov es, bx
     mov di, offset buf
@@ -75,8 +71,7 @@ ent_code_loop:
     mov cx, di
     dec cx                  ; length of entered password
 
-                            ; evaluate hash
-    mov ax, 0h
+    mov ax, 0h              ; evaluate hash
     mov si, offset buf
 
 hash_loop:
@@ -99,16 +94,11 @@ hash_loop:
 
     loop hash_loop
 
-    ; EVAL HASH
-    
-    ; CMP HASH
-    
-    je ok
     mov dx, offset err_msg
-    
-ok:
+    cmp ax, [hash_orig]
+    jne no_ok
     mov dx, offset ok_msg
-
+no_ok:
     mov ah, 09h
     int 21h
     
@@ -121,7 +111,9 @@ program_end:
 
 ok_msg    db 0Dh, "Access granted", "$"
 err_msg   db 0Dh, "Wrong password", "$"
-hash_orig dw 0h
+buf       db 16d dup (0h)
+hash_orig dw 0F9E8h
+; qwertyuiopasdfghö 0F616h
 
 end start
 

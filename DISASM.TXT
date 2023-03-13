@@ -1,0 +1,23 @@
+ 000000CC: AC                        lodsb al,ds:[si]                          
+ 000000CD: AB                        stosw es:[di],ax                          
+ 000000CE: 803C24                    cmp byte ptr [si],24                      
+ 000000D1: 75F9                  (1) jnz 000000CC                              
+ 000000D3: C3                        ret                                       
+ 000000D4: FC                        cld                                       
+ 000000D5: B024                      mov al,24                                 
+ 000000D7: 33DB                      xor bx,bx                                 
+ 000000D9: 43                        inc bx                                    
+ 000000DA: AE                        scasb es:[di],al                          
+ 000000DB: 75FC                  (2) jnz 000000D9                              
+ 000000DD: 4B                        dec bx                                    
+ 000000DE: C3                        ret                                       
+ 000000DF: 55                        push bp                                   
+ 000000E0: 8BEC                      mov bp,sp                                 
+ 000000E2: FC                        cld                                       
+ 000000E3: 8B4E04                    mov cx,word ptr [bp+04]                   
+ 000000E6: F2AE                      repne scasb es:[di],al                    
+ 000000E8: 7402                  (3) jz 000000EC                               
+ 000000EA: 33FF                      xor di,di                                 
+ 000000EC: 4F                        dec di                                    
+ 000000ED: 5D                        pop bp                                    
+ 000000EE: C20200                    ret 0002                                  
